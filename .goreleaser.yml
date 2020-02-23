@@ -7,8 +7,10 @@ before:
 builds:
 - binary: echos
   main: ./cmd/echos/main.go
+  id: echos
 - binary: echob
   main: ./cmd/echob/main.go
+  id: echob
 archives:
 - replacements:
     darwin: Darwin
