@@ -57,7 +57,7 @@ func getClientIP(r *http.Request) string {
 	return clientIP
 }
 
-func realIp(next http.Handler) http.Handler {
+func realIP(next http.Handler) http.Handler {
 	h := func(w http.ResponseWriter, r *http.Request) {
 		r.RemoteAddr = getClientIP(r)
 		next.ServeHTTP(w, r)
