@@ -5,12 +5,30 @@ before:
     # You may remove this if you don't use go modules.
     - go mod download
 builds:
-- binary: echos
-  main: ./cmd/echos
-  id: echos
-- binary: echob
-  main: ./cmd/echob
-  id: echob
+  - binary: echos
+    main: ./cmd/echos
+    id: echos
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+  - binary: echob
+    main: ./cmd/echob
+    id: echob
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
 archives:
 - replacements:
     darwin: Darwin

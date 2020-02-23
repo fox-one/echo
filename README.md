@@ -15,7 +15,7 @@ POST /message
 
 ```json5
 {
-   "category": "PlainText",
+   "category": "Plain_Text",
    "data": "base64 msg data"
 }
 ```
