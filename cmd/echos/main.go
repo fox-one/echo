@@ -11,6 +11,7 @@ import (
 
 	"github.com/fox-one/echo"
 	"github.com/fox-one/mixin-sdk"
+	"github.com/fox-one/pkg/uuid"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
@@ -69,6 +70,10 @@ func main() {
 		}
 
 		msg.ConversationID = conversationID
+		if msg.MessageID == "" {
+			msg.MessageID = uuid.New()
+		}
+
 		if err := user.SendMessage(r.Context(), &msg); err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.DefaultResponder(w, r, render.M{
