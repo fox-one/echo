@@ -47,6 +47,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(cors.AllowAll().Handler)
 	r.Use(middleware.Heartbeat("/hc"))
+	r.Use(realIp)
 	r.Use(middleware.Logger)
 	r.Use(limit())
 
