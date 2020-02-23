@@ -8,8 +8,12 @@ forward group notifications
 ### Server
 
 ```http request
-POST /message
+POST https://echo.yiplee.com/message
 ```
+
+**Header:**
+
+Authorization: Bearer access_token
 
 **Params:**
 
