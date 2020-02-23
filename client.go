@@ -13,6 +13,8 @@ var client = resty.New().
 	SetHostURL(hostURL).
 	SetHeader("Content-Type", "application/json")
 
+// Payload represent message content
+// leave RecipientID empty to broadcast
 type Payload struct {
 	MessageID   string `json:"message_id,omitempty"`
 	RecipientID string `json:"recipient_id,omitempty"`
@@ -20,6 +22,7 @@ type Payload struct {
 	Data        string `json:"data,omitempty"`
 }
 
+// Send Message
 func Send(ctx context.Context, token string, payload Payload) error {
 	req := client.R().SetContext(ctx)
 	resp, err := req.SetAuthToken(token).SetBody(payload).Post("/message")

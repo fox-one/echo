@@ -8,6 +8,7 @@ require (
 	github.com/fox-one/pkg v1.1.14
 	github.com/go-chi/chi v4.0.3+incompatible
 	github.com/go-chi/render v1.0.1
+	github.com/go-resty/resty/v2 v2.1.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/rs/cors v1.7.0
 	github.com/spf13/viper v1.6.2
