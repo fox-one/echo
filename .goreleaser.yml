@@ -6,10 +6,10 @@ before:
     - go mod download
 builds:
 - binary: echos
-  main: ./cmd/echos/main.go
+  main: ./cmd/echos
   id: echos
 - binary: echob
-  main: ./cmd/echob/main.go
+  main: ./cmd/echob
   id: echob
 archives:
 - replacements:

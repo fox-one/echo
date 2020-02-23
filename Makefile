@@ -32,4 +32,4 @@ echos:
 build: dep echob echos
 
 clean: ## Remove previous build
-	@rm -f ./build
+	@rm -rf ./build
