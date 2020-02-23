@@ -47,7 +47,7 @@ func main() {
 	r.Use(cors.AllowAll().Handler)
 	r.Use(middleware.Heartbeat("/hc"))
 	r.Use(middleware.Logger)
-	r.Use(Limit())
+	r.Use(limit())
 
 	r.Post("/message", func(w http.ResponseWriter, r *http.Request) {
 		conversationID, err := extractConversationID(r, user)
@@ -96,7 +96,7 @@ func extractConversationID(r *http.Request, user *mixin.User) (string, error) {
 	token = strings.TrimPrefix(token, "Bearer ")
 	if id, err := echo.ParseToken(token, user.SessionID); err == nil {
 		return id, nil
-	} else {
-		return "", errors.New("invalid authorization token")
 	}
+
+	return "", errors.New("invalid authorization token")
 }

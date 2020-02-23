@@ -10,7 +10,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func Limit() func(next http.Handler) http.Handler {
+func limit() func(next http.Handler) http.Handler {
 	limits := cache.New(cache.NoExpiration, cache.NoExpiration)
 
 	return func(next http.Handler) http.Handler {

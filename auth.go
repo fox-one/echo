@@ -8,6 +8,7 @@ import (
 	"github.com/fox-one/pkg/uuid"
 )
 
+// SignToken sign a jwt token
 func SignToken(userID, sessionID, conversationID string) (string, error) {
 	claim := jwt.StandardClaims{
 		Id:       conversationID,
@@ -18,6 +19,7 @@ func SignToken(userID, sessionID, conversationID string) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claim).SignedString([]byte(sessionID))
 }
 
+// ParseToken parse the jwt token
 func ParseToken(token string, sessionID string) (string, error) {
 	var claim jwt.StandardClaims
 	if _, err := jwt.ParseWithClaims(token, &claim, func(t *jwt.Token) (interface{}, error) {

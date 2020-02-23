@@ -1,0 +1,8 @@
+mode: atomic
+github.com/fox-one/echo/auth.go:12.74,20.2 2 1
+github.com/fox-one/echo/auth.go:23.65,25.90 2 1
+github.com/fox-one/echo/auth.go:31.2,31.28 1 1
+github.com/fox-one/echo/auth.go:35.2,35.22 1 1
+github.com/fox-one/echo/auth.go:25.90,27.3 1 1
+github.com/fox-one/echo/auth.go:27.17,29.3 1 0
+github.com/fox-one/echo/auth.go:31.28,33.3 1 0
