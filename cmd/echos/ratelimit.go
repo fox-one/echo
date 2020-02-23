@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fox-one/pkg/uuid"
 	"github.com/go-chi/render"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/time/rate"
@@ -16,16 +17,17 @@ func limit() func(next http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		h := func(w http.ResponseWriter, r *http.Request) {
-			ip := r.RemoteAddr
+			token := r.Header.Get("Authorization")
+			id := uuid.MD5(token)
 
 			var limiter *rate.Limiter
 
-			if v, ok := limits.Get(ip); ok {
+			if v, ok := limits.Get(id); ok {
 				limiter = v.(*rate.Limiter)
 			} else {
 				limit := rate.Every(time.Millisecond * 10)
 				limiter = rate.NewLimiter(limit, 150)
-				limits.SetDefault(ip, limiter)
+				limits.SetDefault(id, limiter)
 			}
 
 			if !limiter.Allow() {
