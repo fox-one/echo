@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/render"
@@ -15,14 +16,7 @@ func limit() func(next http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		h := func(w http.ResponseWriter, r *http.Request) {
-			ip, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil {
-				render.Status(r, http.StatusInternalServerError)
-				render.DefaultResponder(w, r, render.M{
-					"error": err.Error(),
-				})
-				return
-			}
+			ip := r.RemoteAddr
 
 			var limiter *rate.Limiter
 
@@ -45,4 +39,29 @@ func limit() func(next http.Handler) http.Handler {
 
 		return http.HandlerFunc(h)
 	}
+}
+
+func getClientIP(r *http.Request) string {
+	clientIP := r.Header.Get("X-Forwarded-For")
+	clientIP = strings.TrimSpace(strings.Split(clientIP, ",")[0])
+	if clientIP == "" {
+		clientIP = strings.TrimSpace(r.Header.Get("X-Real-Ip"))
+	}
+
+	if clientIP == "" {
+		if ip, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr)); err == nil {
+			clientIP = ip
+		}
+	}
+
+	return clientIP
+}
+
+func realIP(next http.Handler) http.Handler {
+	h := func(w http.ResponseWriter, r *http.Request) {
+		r.RemoteAddr = getClientIP(r)
+		next.ServeHTTP(w, r)
+	}
+
+	return http.HandlerFunc(h)
 }
