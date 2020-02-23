@@ -1,0 +1,13 @@
+[Unit]
+Description=Echo Api Service
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Restart=on-failure
+RestartSec=1s
+ExecStart=/usr/bin/echos --config /etc/echo/config.json
+
+[Install]
+WantedBy=multi-user.target
