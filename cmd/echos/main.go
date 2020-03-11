@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -12,7 +14,6 @@ import (
 	"github.com/fox-one/echo"
 	"github.com/fox-one/mixin-sdk"
 	"github.com/fox-one/pkg/uuid"
-	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 	"github.com/rs/cors"
@@ -44,52 +45,29 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r := chi.NewRouter()
-	r.Use(cors.AllowAll().Handler)
-	r.Use(middleware.Heartbeat("/hc"))
-	r.Use(realIP)
-	r.Use(middleware.Logger)
-	r.Use(limit())
-
-	r.Post("/message", func(w http.ResponseWriter, r *http.Request) {
-		conversationID, err := extractConversationID(r, user)
-		if err != nil {
-			render.Status(r, http.StatusUnauthorized)
-			render.DefaultResponder(w, r, render.M{
-				"error": err.Error(),
-			})
-			return
-		}
-
-		var msg mixin.MessageRequest
-		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var resp json.RawMessage
+		if err := user.Request(r.Context(), r.Method, r.URL.String(), r.Body, &resp); err != nil {
 			render.Status(r, http.StatusBadRequest)
 			render.DefaultResponder(w, r, render.M{
 				"error": err.Error(),
 			})
-			return
-		}
-
-		msg.ConversationID = conversationID
-		if msg.MessageID == "" {
-			msg.MessageID = uuid.New()
-		}
-
-		if err := user.SendMessage(r.Context(), &msg); err != nil {
-			render.Status(r, http.StatusBadRequest)
+		} else {
+			render.Status(r, http.StatusOK)
 			render.DefaultResponder(w, r, render.M{
-				"error": err.Error(),
+				"data": resp,
 			})
-			return
 		}
-
-		render.Status(r, http.StatusOK)
-		render.DefaultResponder(w, r, render.M{})
 	})
+
+	handler = handleMessages(user)(handler)
+	handler = middleware.Logger(handler)
+	handler = middleware.Heartbeat("/hc")(handler)
+	handler = cors.AllowAll().Handler(handler)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", *port),
-		Handler: r,
+		Handler: handler,
 	}
 
 	if err := srv.ListenAndServe(); err != nil {
@@ -105,4 +83,37 @@ func extractConversationID(r *http.Request, user *mixin.User) (string, error) {
 	}
 
 	return "", errors.New("invalid authorization token")
+}
+
+func handleMessages(user *mixin.User) func(handler http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost && r.URL.Path == "/messages" {
+				conversationID, err := extractConversationID(r, user)
+				if err != nil {
+					render.Status(r, http.StatusUnauthorized)
+					render.DefaultResponder(w, r, render.M{
+						"error": err.Error(),
+					})
+					return
+				}
+
+				var msg mixin.MessageRequest
+				_ = json.NewDecoder(r.Body).Decode(&msg)
+				_ = r.Body.Close()
+
+				msg.ConversationID = conversationID
+				if msg.MessageID == "" {
+					msg.MessageID = uuid.New()
+				}
+
+				body, _ := json.Marshal(msg)
+				r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+			}
+
+			next.ServeHTTP(w, r)
+		}
+
+		return http.HandlerFunc(fn)
+	}
 }
