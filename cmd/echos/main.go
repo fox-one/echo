@@ -61,6 +61,7 @@ func main() {
 	})
 
 	handler = handleMessages(user)(handler)
+	handler = middleware.NewCompressor(5).Handler()(handler)
 	handler = middleware.Logger(handler)
 	handler = middleware.Heartbeat("/hc")(handler)
 	handler = cors.AllowAll().Handler(handler)
