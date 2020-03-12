@@ -89,7 +89,7 @@ func extractConversationID(r *http.Request, user *mixin.User) (string, error) {
 func handleMessages(user *mixin.User) func(handler http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost && r.URL.Path == "/messages" {
+			if r.Method == http.MethodPost && r.URL.Path == "/message" {
 				conversationID, err := extractConversationID(r, user)
 				if err != nil {
 					render.Status(r, http.StatusUnauthorized)
@@ -110,6 +110,7 @@ func handleMessages(user *mixin.User) func(handler http.Handler) http.Handler {
 
 				body, _ := json.Marshal(msg)
 				r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+				r.URL.Path = "/messages"
 			}
 
 			next.ServeHTTP(w, r)

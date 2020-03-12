@@ -50,7 +50,7 @@ func Execute(ctx context.Context, method, uri string, body interface{}) ([]byte,
 // SendMessage send a message
 func SendMessage(ctx context.Context, token string, payload Payload) error {
 	req := client.R().SetContext(ctx)
-	resp, err := req.SetAuthToken(token).SetBody(payload).Post("/messages")
+	resp, err := req.SetAuthToken(token).SetBody(payload).Post("/message")
 	if err != nil {
 		return err
 	}
