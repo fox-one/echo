@@ -28,16 +28,16 @@ builds:
       - amd64
       - arm
   - binary: scanner
-      main: ./cmd/scanner
-      id: scanner
-      env:
-        - CGO_ENABLED=0
-      goos:
-        - linux
-        - darwin
-      goarch:
-        - amd64
-        - arm
+    main: ./cmd/scanner
+    id: scanner
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm
 archives:
   - files:
     - gear/systemd/*
