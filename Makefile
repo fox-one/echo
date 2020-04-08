@@ -29,7 +29,10 @@ echob:
 echos:
 	@go build -o build/echos ./cmd/echos
 
-build: dep echob echos
+scanner:
+	@go build -o build/scanner ./cmd/scanner
+
+build: dep echob echos scanner
 
 clean: ## Remove previous build
 	@rm -rf ./build

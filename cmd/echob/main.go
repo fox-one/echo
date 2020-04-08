@@ -70,12 +70,13 @@ func (h handler) OnMessage(ctx context.Context, msg *mixin.MessageView, userID s
 	}
 
 	var payload struct {
-		Action string `json:"action,omitempty"`
-		UserID string `json:"user_id,omitempty"`
+		Action        string `json:"action,omitempty"`
+		UserID        string `json:"user_id,omitempty"`
+		ParticipantID string `json:"participant_id,omitempty"`
 	}
 	_ = json.Unmarshal(data, &payload)
 
-	if payload.Action != mixin.ParticipantActionAdd {
+	if payload.Action != mixin.ParticipantActionAdd || payload.ParticipantID != userID {
 		return nil
 	}
 
