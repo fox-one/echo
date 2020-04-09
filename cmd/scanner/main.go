@@ -12,10 +12,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/fox-one/echo"
-	"github.com/fox-one/pkg/lruset"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 )
 
 // Log represents scan message
@@ -87,7 +88,7 @@ func main() {
 	r := io.TeeReader(in, out)
 	s := bufio.NewScanner(r)
 	b := bytes.Buffer{}
-	set := lruset.New(5)
+	limiters := map[string]*rate.Limiter{}
 
 	var log Log
 	for s.Scan() {
@@ -106,11 +107,15 @@ func main() {
 
 		// filter duplicated error logs
 		if log.Error != "" {
-			if set.Contains(log.Error) {
-				continue
+			limiter, ok := limiters[log.Error]
+			if !ok {
+				limiter = rate.NewLimiter(rate.Every(time.Minute), 2)
+				limiters[log.Error] = limiter
 			}
 
-			set.Add(log.Error)
+			if !limiter.Allow() {
+				continue
+			}
 		}
 
 		category := "PLAIN_TEXT"
