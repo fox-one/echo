@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/fox-one/echo"
@@ -34,6 +35,7 @@ var (
 	stdout = flag.Bool("stdout", false, "output to stdout")
 	stderr = flag.Bool("stderr", false, "output to stderr")
 	format = flag.String("format", "text", "mixin message category")
+	cmd    = flag.String("cmd", "", "execute shell command as input")
 )
 
 func main() {
@@ -51,18 +53,38 @@ func main() {
 
 	ctx := context.Background()
 
-	var out io.Writer
+	var (
+		in  io.Reader = os.Stdin
+		out io.Writer = ioutil.Discard
+	)
+
+	var args []string
+	if err := json.Unmarshal([]byte(*cmd), &args); err == nil && len(args) > 0 {
+		c := exec.Command(args[0], args[1:]...)
+
+		pipe, err := c.StdoutPipe()
+		if err != nil {
+			logrus.Fatal(err)
+		}
+
+		defer pipe.Close()
+
+		if err := c.Start(); err != nil {
+			logrus.Fatal(err)
+		}
+
+		in = pipe
+		logrus.Infoln("scan", c.String())
+	}
 
 	switch {
 	case *stdout:
 		out = os.Stdout
 	case *stderr:
 		out = os.Stderr
-	default:
-		out = ioutil.Discard
 	}
 
-	r := io.TeeReader(os.Stdin, out)
+	r := io.TeeReader(in, out)
 	s := bufio.NewScanner(r)
 	b := bytes.Buffer{}
 	set := lruset.New(5)
