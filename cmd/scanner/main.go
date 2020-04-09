@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -9,42 +10,49 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"time"
+	"strings"
 
 	"github.com/fox-one/echo"
-	"github.com/fox-one/mixin-sdk"
-	"github.com/patrickmn/go-cache"
+	"github.com/fox-one/pkg/lruset"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
-const defaultLevel = "default"
-
 // Message represents scan message
-type Message struct {
+type Log struct {
 	Level string `json:"level,omitempty"`
 	Error string `json:"error,omitempty"`
+	Msg   string `json:"msg,omitempty"`
 }
 
-func (msg *Message) reset() {
-	msg.Level = ""
-	msg.Error = ""
+func (log *Log) reset() {
+	log.Level = ""
+	log.Error = ""
+	log.Msg = ""
 }
 
 var (
 	stdout = flag.Bool("stdout", false, "output to stdout")
 	stderr = flag.Bool("stderr", false, "output to stderr")
+	format = flag.String("format", "text", "mixin message category")
 )
 
 func main() {
 	flag.Parse()
 
-	setupViper()
-	checkTokens()
+	tokens := make(map[string]string)
+	for _, level := range logrus.AllLevels {
+		levelString := level.String()
+		env := "scanner_token_" + levelString
+		if token := os.Getenv(strings.ToUpper(env)); token != "" {
+			tokens[level.String()] = token
+			logrus.Infoln(levelString, "enabled")
+		}
+	}
 
 	ctx := context.Background()
 
 	var out io.Writer
+
 	switch {
 	case *stdout:
 		out = os.Stdout
@@ -56,81 +64,65 @@ func main() {
 
 	r := io.TeeReader(os.Stdin, out)
 	s := bufio.NewScanner(r)
-	c := cache.New(time.Minute, 5*time.Minute)
+	b := bytes.Buffer{}
+	set := lruset.New(5)
 
-	var msg Message
+	var log Log
 	for s.Scan() {
-		// reset msg level
-		msg.reset()
+		// reset log
+		log.reset()
 
-		if err := json.Unmarshal(s.Bytes(), &msg); err != nil {
+		raw := json.RawMessage(s.Bytes())
+		if err := json.Unmarshal(raw, &log); err != nil {
 			continue
 		}
 
-		if msg.Level == "" {
-			continue
-		}
-
-		if msg.Error != "" {
-			if _, ok := c.Get(msg.Error); ok {
-				continue
-			}
-
-			c.SetDefault(msg.Error, nil)
-		}
-
-		token, ok := getToken(msg.Level)
+		token, ok := tokens[log.Level]
 		if !ok {
 			continue
 		}
 
-		data, _ := json.MarshalIndent(json.RawMessage(s.Bytes()), "", "    ")
-		payload := echo.Payload{
-			Category: mixin.MessageCategoryPlainText,
-			Data:     base64.StdEncoding.EncodeToString(data),
-		}
-
-		for i := 0; i < 5; i++ {
-			if err := echo.SendMessage(ctx, token, payload); err != nil {
-				logrus.WithError(err).Error("send message")
-				time.Sleep(time.Second)
+		// filter duplicated error logs
+		if log.Error != "" {
+			if set.Contains(log.Error) {
 				continue
 			}
 
-			break
+			set.Add(log.Error)
 		}
 
+		category := "PLAIN_TEXT"
+		data, _ := json.MarshalIndent(raw, "", "  ")
+		if *format == "post" {
+			b.Reset()
+			b.WriteString("### [")
+			b.WriteString(log.Level)
+			b.WriteString("] ")
+			b.WriteString(log.Msg)
+			b.WriteString(" ###")
+			b.WriteByte('\n')
+			b.WriteByte('\n')
+			b.WriteString("```json")
+			b.WriteByte('\n')
+			b.Write(data)
+			b.WriteByte('\n')
+			b.WriteString("```")
+
+			data = b.Bytes()
+			category = "PLAIN_POST"
+		}
+
+		payload := echo.Payload{
+			Category: category,
+			Data:     base64.StdEncoding.EncodeToString(data),
+		}
+
+		if err := echo.SendMessage(ctx, token, payload); err != nil {
+			logrus.WithError(err).Errorf("send message: %s", log.Msg)
+		}
 	}
 
-	logrus.WithError(s.Err()).Infoln("terminated")
-}
-
-func setupViper() {
-	viper.SetEnvPrefix("scanner_token")
-	for _, level := range logrus.AllLevels {
-		_ = viper.BindEnv(level.String())
+	if err := s.Err(); err != nil {
+		logrus.WithError(err).Fatal("terminated")
 	}
-
-	_ = viper.BindEnv(defaultLevel)
-}
-
-func checkTokens() {
-	for _, level := range logrus.AllLevels {
-		_, ok := getToken(level.String())
-		logrus.Infoln("scanner token", level.String(), ok)
-	}
-}
-
-func getToken(level string) (string, bool) {
-	v, err := logrus.ParseLevel(level)
-	if err != nil {
-		return "", false
-	}
-
-	token := viper.GetString(v.String())
-	if token == "" {
-		token = viper.GetString(defaultLevel)
-	}
-
-	return token, token != ""
 }
