@@ -17,7 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Message represents scan message
+// Log represents scan message
 type Log struct {
 	Level string `json:"level,omitempty"`
 	Error string `json:"error,omitempty"`
