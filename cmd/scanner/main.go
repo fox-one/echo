@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"io"
+	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/fox-one/echo"
 	"github.com/fox-one/mixin-sdk"
+	"github.com/patrickmn/go-cache"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -20,20 +23,46 @@ const defaultLevel = "default"
 // Message represents scan message
 type Message struct {
 	Level string `json:"level,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
+func (msg *Message) reset() {
+	msg.Level = ""
+	msg.Error = ""
+}
+
+var (
+	stdout = flag.Bool("stdout", false, "output to stdout")
+	stderr = flag.Bool("stderr", false, "output to stderr")
+)
+
 func main() {
+	flag.Parse()
+
 	setupViper()
 	checkTokens()
 
 	ctx := context.Background()
-	r := io.TeeReader(os.Stdin, os.Stderr)
+
+	var out io.Writer
+	switch {
+	case *stdout:
+		out = os.Stdout
+	case *stderr:
+		out = os.Stderr
+	default:
+		out = ioutil.Discard
+	}
+
+	r := io.TeeReader(os.Stdin, out)
 	s := bufio.NewScanner(r)
+	c := cache.New(time.Minute, 5*time.Minute)
 
 	var msg Message
 	for s.Scan() {
 		// reset msg level
-		msg.Level = ""
+		msg.reset()
+
 		if err := json.Unmarshal(s.Bytes(), &msg); err != nil {
 			continue
 		}
@@ -42,12 +71,20 @@ func main() {
 			continue
 		}
 
+		if msg.Error != "" {
+			if _, ok := c.Get(msg.Error); ok {
+				continue
+			}
+
+			c.SetDefault(msg.Error, nil)
+		}
+
 		token, ok := getToken(msg.Level)
 		if !ok {
 			continue
 		}
 
-		data, _ := json.MarshalIndent(json.RawMessage(s.Bytes()), "", "  ")
+		data, _ := json.MarshalIndent(json.RawMessage(s.Bytes()), "", "    ")
 		payload := echo.Payload{
 			Category: mixin.MessageCategoryPlainText,
 			Data:     base64.StdEncoding.EncodeToString(data),
