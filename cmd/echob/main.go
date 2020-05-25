@@ -67,7 +67,7 @@ func (h handler) OnMessage(ctx context.Context, msg *mixin.MessageView, userID s
 
 	if msg.Category != mixin.MessageCategorySystemConversation {
 		var raw json.RawMessage
-		if err := json.Unmarshal(data, &raw); err != nil {
+		if err := json.Unmarshal(data, &raw); err == nil {
 			data, _ = json.MarshalIndent(raw, "", "  ")
 			return h.user.SendMessage(ctx, &mixin.MessageRequest{
 				ConversationID: msg.ConversationID,
