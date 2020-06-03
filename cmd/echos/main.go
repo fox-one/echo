@@ -15,6 +15,7 @@ import (
 
 	"github.com/fox-one/echo"
 	"github.com/fox-one/mixin-sdk"
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 	"github.com/gofrs/uuid"
 	"github.com/oxtoacart/bpool"
@@ -73,8 +74,14 @@ func main() {
 	}
 
 	svr := &http.Server{
-		Addr:    fmt.Sprintf(":%d", *port),
-		Handler: wrapMessage(user)(proxy),
+		Addr: fmt.Sprintf(":%d", *port),
+		Handler: chain(
+			proxy,
+			middleware.Recoverer,
+			middleware.Logger,
+			middleware.NewCompressor(5).Handler,
+			wrapMessage(user),
+		),
 	}
 
 	if err := svr.ListenAndServe(); err != nil {
@@ -133,4 +140,12 @@ func wrapMessage(user *mixin.User) func(handler http.Handler) http.Handler {
 
 		return http.HandlerFunc(fn)
 	}
+}
+
+func chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+	for idx := 0; idx < len(middlewares); idx++ {
+		h = middlewares[len(middlewares)-1-idx](h)
+	}
+
+	return h
 }

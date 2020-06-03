@@ -6,6 +6,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fox-one/mixin-sdk v1.1.2
 	github.com/fox-one/pkg v1.1.14
+	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/render v1.0.1
 	github.com/go-resty/resty/v2 v2.1.0
 	github.com/gofrs/uuid v3.2.0+incompatible
