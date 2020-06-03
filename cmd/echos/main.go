@@ -64,7 +64,7 @@ func main() {
 				req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			}
 
-			uri := extractUri(req.URL)
+			uri := extractURI(req.URL)
 			token, _ := user.SignToken(req.Method, uri, body, time.Minute)
 			req.Header.Set("Authorization", "Bearer "+token)
 			// mixin api server 屏蔽来自 proxy 的请求
@@ -94,7 +94,7 @@ func extractConversationID(r *http.Request, user *mixin.User) (string, error) {
 	return "", errors.New("invalid authorization token")
 }
 
-func extractUri(u *url.URL) string {
+func extractURI(u *url.URL) string {
 	s := u.String()
 	idx := strings.Index(s, u.Path)
 	return s[idx:]
