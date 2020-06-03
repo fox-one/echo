@@ -62,22 +62,25 @@ func (h handler) OnAckReceipt(ctx context.Context, msg *mixin.MessageView, userI
 func (h handler) OnMessage(ctx context.Context, msg *mixin.MessageView, userID string) error {
 	data, err := base64.StdEncoding.DecodeString(msg.Data)
 	if err != nil {
+		data, err = base64.URLEncoding.DecodeString(msg.Data)
+	}
+
+	if err != nil {
 		return nil
 	}
 
 	if msg.Category != mixin.MessageCategorySystemConversation {
 		var raw json.RawMessage
 		if err := json.Unmarshal(data, &raw); err == nil {
-			data, _ = json.MarshalIndent(raw, "", "  ")
-			return h.user.SendMessage(ctx, &mixin.MessageRequest{
-				ConversationID: msg.ConversationID,
-				MessageID:      uuid.Modify(msg.MessageID, "reply"),
-				Category:       mixin.MessageCategoryPlainText,
-				Data:           base64.StdEncoding.EncodeToString(data),
-			})
+			data, _ = json.MarshalIndent(raw, "", "    ")
 		}
 
-		return nil
+		return h.user.SendMessage(ctx, &mixin.MessageRequest{
+			ConversationID: msg.ConversationID,
+			MessageID:      uuid.Modify(msg.MessageID, "reply"),
+			Category:       mixin.MessageCategoryPlainText,
+			Data:           base64.StdEncoding.EncodeToString(data),
+		})
 	}
 
 	var payload struct {
