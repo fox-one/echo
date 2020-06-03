@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strings"
 	"time"
 
@@ -54,32 +53,31 @@ func main() {
 	proxy := &httputil.ReverseProxy{
 		BufferPool: bpool.NewBytePool(64, 1024*8),
 		Director: func(req *http.Request) {
-			req.URL.Host = host
-			req.URL.Scheme = "https"
-
 			var body []byte
 			if req.Body != nil {
 				body, _ = ioutil.ReadAll(req.Body)
 				_ = req.Body.Close()
-				req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+				req.Body = ioutil.NopCloser(bytes.NewReader(body))
 			}
 
-			uri := extractURI(req.URL)
-			token, _ := user.SignToken(req.Method, uri, body, time.Minute)
+			token, _ := user.SignToken(req.Method, req.URL.String(), body, time.Minute)
 			req.Header.Set("Authorization", "Bearer "+token)
 			// mixin api server 屏蔽来自 proxy 的请求
 			// https://github.com/golang/go/issues/38079
 			// go 1.5 上线
 			req.Header["X-Forward-X"] = nil
+
+			req.URL.Host = host
+			req.URL.Scheme = "https"
 		},
 	}
 
-	srv := &http.Server{
+	svr := &http.Server{
 		Addr:    fmt.Sprintf(":%d", *port),
 		Handler: wrapMessage(user)(proxy),
 	}
 
-	if err := srv.ListenAndServe(); err != nil {
+	if err := svr.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -92,12 +90,6 @@ func extractConversationID(r *http.Request, user *mixin.User) (string, error) {
 	}
 
 	return "", errors.New("invalid authorization token")
-}
-
-func extractURI(u *url.URL) string {
-	s := u.String()
-	idx := strings.Index(s, u.Path)
-	return s[idx:]
 }
 
 func wrapMessage(user *mixin.User) func(handler http.Handler) http.Handler {
