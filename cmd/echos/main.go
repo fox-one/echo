@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -25,11 +25,10 @@ import (
 var (
 	configFile = flag.String("config", "./config.json", "config file")
 	port       = flag.Int("port", 9999, "server port")
-	pool       = bpool.NewBufferPool(64)
 )
 
 const (
-	host = "api.mixin.one"
+	host = "mixin-api.zeromesh.net"
 )
 
 func main() {
@@ -60,16 +59,17 @@ func main() {
 
 			var body []byte
 			if req.Body != nil {
-				b := pool.Get()
-				r := io.TeeReader(req.Body, b)
-				body, _ = ioutil.ReadAll(r)
+				body, _ = ioutil.ReadAll(req.Body)
 				_ = req.Body.Close()
-				req.Body = ioutil.NopCloser(b)
+				req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			}
 
 			uri := extractUri(req.URL)
 			token, _ := user.SignToken(req.Method, uri, body, time.Minute)
 			req.Header.Set("Authorization", "Bearer "+token)
+			// mixin api server 屏蔽来自 proxy 的请求
+			// https://github.com/golang/go/issues/38079
+			// go 1.5 上线
 			req.Header["X-Forward-X"] = nil
 		},
 	}
@@ -101,6 +101,8 @@ func extractUri(u *url.URL) string {
 }
 
 func wrapMessage(user *mixin.User) func(handler http.Handler) http.Handler {
+	pool := bpool.NewBufferPool(64)
+
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost && r.URL.Path == "/message" {
