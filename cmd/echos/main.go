@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,8 +132,9 @@ func wrapMessage(user *mixin.User) func(handler http.Handler) http.Handler {
 				b := pool.Get()
 				defer pool.Put(b)
 				_ = json.NewEncoder(b).Encode(msg)
+				r.Header.Set("Content-Length", strconv.Itoa(b.Len()))
+				r.ContentLength = int64(b.Len())
 				r.Body = ioutil.NopCloser(b)
-
 				r.URL.Path = "/messages"
 			}
 
