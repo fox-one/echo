@@ -66,8 +66,9 @@ func main() {
 			// mixin api server 屏蔽来自 proxy 的请求
 			// https://github.com/golang/go/issues/38079
 			// go 1.5 上线
-			req.Header["X-Forward-X"] = nil
+			req.Header["X-Forwarded-For"] = nil
 
+			req.Host = host
 			req.URL.Host = host
 			req.URL.Scheme = "https"
 		},
