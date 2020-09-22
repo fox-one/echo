@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -19,24 +18,13 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// Log represents scan message
-type Log struct {
-	Level string `json:"level,omitempty"`
-	Error string `json:"error,omitempty"`
-	Msg   string `json:"msg,omitempty"`
-}
-
-func (log *Log) reset() {
-	log.Level = ""
-	log.Error = ""
-	log.Msg = ""
-}
-
 var (
 	stdout = flag.Bool("stdout", false, "output to stdout")
 	stderr = flag.Bool("stderr", false, "output to stderr")
-	format = flag.String("format", "text", "mixin message category")
+	format = flag.String("format", "text", "deprecated")
 	cmd    = flag.String("cmd", "", "execute shell command as input")
+
+	ctx = context.Background()
 )
 
 func main() {
@@ -52,51 +40,40 @@ func main() {
 		}
 	}
 
-	ctx := context.Background()
-
-	var (
-		in  io.Reader = os.Stdin
-		out io.Writer = ioutil.Discard
-	)
+	var input io.Reader = os.Stdin
 
 	var args []string
-	if err := json.Unmarshal([]byte(*cmd), &args); err == nil && len(args) > 0 {
-		c := exec.Command(args[0], args[1:]...)
+	if _ = json.Unmarshal([]byte(*cmd), &args); len(args) > 0 {
+		pr, pw := io.Pipe()
 
-		pipe, err := c.StdoutPipe()
-		if err != nil {
-			logrus.Fatal(err)
-		}
+		go func() {
+			defer pr.Close()
 
-		defer pipe.Close()
+			if err := runCmd(pw, args[0], args[1:]...); err != nil {
+				logrus.WithError(err).Errorln("cmd exist")
+			}
+		}()
 
-		if err := c.Start(); err != nil {
-			logrus.Fatal(err)
-		}
-
-		in = pipe
-		logrus.Infoln("scan", c.String())
+		input = pr
 	}
 
-	switch {
-	case *stdout:
-		out = os.Stdout
-	case *stderr:
-		out = os.Stderr
+	if *stdout {
+		input = io.TeeReader(input, os.Stdout)
+	} else if *stderr {
+		input = io.TeeReader(input, os.Stderr)
 	}
 
-	r := io.TeeReader(in, out)
-	s := bufio.NewScanner(r)
-	b := bytes.Buffer{}
+	s := bufio.NewScanner(input)
+	b := &bytes.Buffer{}
 	limiters := map[string]*rate.Limiter{}
 
 	var log Log
 	for s.Scan() {
 		// reset log
 		log.reset()
+		b.Reset()
 
-		raw := json.RawMessage(s.Bytes())
-		if err := json.Unmarshal(raw, &log); err != nil {
+		if err := json.Unmarshal(s.Bytes(), &log); err != nil {
 			continue
 		}
 
@@ -118,38 +95,37 @@ func main() {
 			}
 		}
 
-		category := "PLAIN_TEXT"
-		data, _ := json.MarshalIndent(raw, "", "  ")
-		if *format == "post" {
-			b.Reset()
-			b.WriteString("### [")
-			b.WriteString(log.Level)
-			b.WriteString("] ")
-			b.WriteString(log.Msg)
-			b.WriteString(" ###")
-			b.WriteByte('\n')
-			b.WriteByte('\n')
-			b.WriteString("```json")
-			b.WriteByte('\n')
-			b.Write(data)
-			b.WriteByte('\n')
-			b.WriteString("```")
-
-			data = b.Bytes()
-			category = "PLAIN_POST"
-		}
+		renderLog(&log, b)
 
 		payload := echo.Payload{
-			Category: category,
-			Data:     base64.StdEncoding.EncodeToString(data),
+			Category: "PLAIN_POST",
+			Data:     base64.StdEncoding.EncodeToString(b.Bytes()),
 		}
 
 		if err := echo.SendMessage(ctx, token, payload); err != nil {
 			logrus.WithError(err).Errorf("send message: %s", log.Msg)
 		}
 	}
+}
 
-	if err := s.Err(); err != nil {
-		logrus.WithError(err).Fatal("terminated")
+func runCmd(w io.Writer, name string, args ...string) error {
+	for {
+		c := exec.Command(name, args...)
+		c.Env = os.Environ()
+		c.Stderr = w
+		c.Stdout = w
+
+		if err := c.Start(); err != nil {
+			return err
+		}
+
+		// 如果程序非正常退出，等待 1s，继续执行
+		// 否则结束
+		if err := c.Wait(); err == nil {
+			return nil
+		}
+
+		time.Sleep(time.Second)
+		logrus.WithField("args", strings.Join(args, " ")).Infof("Restart %s", name)
 	}
 }
