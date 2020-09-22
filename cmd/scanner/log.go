@@ -16,11 +16,13 @@ const (
 	fieldNameMsg   = "msg"
 )
 
+// Entry represents Log Entry from logrus
 type Entry struct {
 	Key   string
 	Value string
 }
 
+// Log represents log message
 type Log struct {
 	Level   string
 	Error   string
@@ -59,7 +61,7 @@ func parseLog(token []byte, log *Log) {
 	// parse json
 	if err := json.Unmarshal(token, &values); err != nil {
 		s := bufio.NewScanner(bytes.NewReader(token))
-		s.Split(ScanWords)
+		s.Split(scanWords)
 
 		for s.Scan() {
 			if fields := strings.SplitN(s.Text(), "=", 2); len(fields) == 2 {
@@ -110,7 +112,7 @@ func isSpace(r rune) bool {
 	return false
 }
 
-func ScanWords(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func scanWords(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	// Skip leading spaces.
 	start := 0
 	for width := 0; start < len(data); start += width {
