@@ -8,35 +8,24 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/bluele/gcache"
 	"github.com/fox-one/echo"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/time/rate"
 )
-
-// Log represents scan message
-type Log struct {
-	Level string `json:"level,omitempty"`
-	Error string `json:"error,omitempty"`
-	Msg   string `json:"msg,omitempty"`
-}
-
-func (log *Log) reset() {
-	log.Level = ""
-	log.Error = ""
-	log.Msg = ""
-}
 
 var (
 	stdout = flag.Bool("stdout", false, "output to stdout")
 	stderr = flag.Bool("stderr", false, "output to stderr")
-	format = flag.String("format", "text", "mixin message category")
 	cmd    = flag.String("cmd", "", "execute shell command as input")
+	// deprecated
+	format = flag.String("format", "text", "deprecated")
+
+	ctx = context.Background()
 )
 
 func main() {
@@ -52,54 +41,44 @@ func main() {
 		}
 	}
 
-	ctx := context.Background()
-
-	var (
-		in  io.Reader = os.Stdin
-		out io.Writer = ioutil.Discard
-	)
+	var input io.Reader = os.Stdin
 
 	var args []string
-	if err := json.Unmarshal([]byte(*cmd), &args); err == nil && len(args) > 0 {
-		c := exec.Command(args[0], args[1:]...)
-
-		pipe, err := c.StdoutPipe()
+	if _ = json.Unmarshal([]byte(*cmd), &args); len(args) > 0 {
+		pr, pw, err := os.Pipe()
 		if err != nil {
-			logrus.Fatal(err)
+			logrus.Panicln("os.Pipe", err)
 		}
 
-		defer pipe.Close()
+		go func() {
+			defer pr.Close()
+			defer pw.Close()
 
-		if err := c.Start(); err != nil {
-			logrus.Fatal(err)
-		}
+			if err := runCmd(pw, args[0], args[1:]...); err != nil {
+				logrus.WithError(err).Errorln("cmd exist")
+			}
+		}()
 
-		in = pipe
-		logrus.Infoln("scan", c.String())
+		input = pr
 	}
 
-	switch {
-	case *stdout:
-		out = os.Stdout
-	case *stderr:
-		out = os.Stderr
+	if *stdout {
+		input = io.TeeReader(input, os.Stdout)
+	} else if *stderr {
+		input = io.TeeReader(input, os.Stderr)
 	}
 
-	r := io.TeeReader(in, out)
-	s := bufio.NewScanner(r)
-	b := bytes.Buffer{}
-	limiters := map[string]*rate.Limiter{}
+	s := bufio.NewScanner(input)
+	b := &bytes.Buffer{}
+	limiters := gcache.New(5).LRU().Build()
 
-	var log Log
+	var log Entry
 	for s.Scan() {
 		// reset log
 		log.reset()
+		b.Reset()
 
-		raw := json.RawMessage(s.Bytes())
-		if err := json.Unmarshal(raw, &log); err != nil {
-			continue
-		}
-
+		parseLog(s.Bytes(), &log)
 		token, ok := tokens[log.Level]
 		if !ok {
 			continue
@@ -107,49 +86,44 @@ func main() {
 
 		// filter duplicated error logs
 		if log.Error != "" {
-			limiter, ok := limiters[log.Error]
-			if !ok {
-				limiter = rate.NewLimiter(rate.Every(time.Minute), 2)
-				limiters[log.Error] = limiter
-			}
-
-			if !limiter.Allow() {
+			if _, err := limiters.Get(log.Error); err != gcache.KeyNotFoundError {
 				continue
 			}
+
+			_ = limiters.SetWithExpire(log.Error, struct{}{}, time.Minute)
 		}
 
-		category := "PLAIN_TEXT"
-		data, _ := json.MarshalIndent(raw, "", "  ")
-		if *format == "post" {
-			b.Reset()
-			b.WriteString("### [")
-			b.WriteString(log.Level)
-			b.WriteString("] ")
-			b.WriteString(log.Msg)
-			b.WriteString(" ###")
-			b.WriteByte('\n')
-			b.WriteByte('\n')
-			b.WriteString("```json")
-			b.WriteByte('\n')
-			b.Write(data)
-			b.WriteByte('\n')
-			b.WriteString("```")
-
-			data = b.Bytes()
-			category = "PLAIN_POST"
-		}
+		renderLog(&log, b)
 
 		payload := echo.Payload{
-			Category: category,
-			Data:     base64.StdEncoding.EncodeToString(data),
+			Category: "PLAIN_POST",
+			Data:     base64.StdEncoding.EncodeToString(b.Bytes()),
 		}
 
 		if err := echo.SendMessage(ctx, token, payload); err != nil {
 			logrus.WithError(err).Errorf("send message: %s", log.Msg)
 		}
 	}
+}
 
-	if err := s.Err(); err != nil {
-		logrus.WithError(err).Fatal("terminated")
+func runCmd(w io.Writer, name string, args ...string) error {
+	for {
+		c := exec.Command(name, args...)
+		c.Env = os.Environ()
+		c.Stderr = w
+		c.Stdout = w
+
+		if err := c.Start(); err != nil {
+			return err
+		}
+
+		// 如果程序非正常退出，等待 1s，继续执行
+		// 否则结束
+		if err := c.Wait(); err == nil {
+			return nil
+		}
+
+		time.Sleep(time.Second)
+		logrus.WithField("args", strings.Join(args, " ")).Infof("Restart %s", name)
 	}
 }
