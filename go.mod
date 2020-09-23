@@ -3,6 +3,7 @@ module github.com/fox-one/echo
 go 1.13
 
 require (
+	github.com/bluele/gcache v0.0.0-20190518031135-bc40bd653833
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/fox-one/mixin-sdk v1.1.2
 	github.com/fox-one/pkg v1.1.14

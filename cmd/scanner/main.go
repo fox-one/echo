@@ -13,16 +13,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bluele/gcache"
 	"github.com/fox-one/echo"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/time/rate"
 )
 
 var (
 	stdout = flag.Bool("stdout", false, "output to stdout")
 	stderr = flag.Bool("stderr", false, "output to stderr")
-	format = flag.String("format", "text", "deprecated")
 	cmd    = flag.String("cmd", "", "execute shell command as input")
+	// deprecated
+	format = flag.String("format", "text", "deprecated")
 
 	ctx = context.Background()
 )
@@ -65,7 +66,7 @@ func main() {
 
 	s := bufio.NewScanner(input)
 	b := &bytes.Buffer{}
-	limiters := map[string]*rate.Limiter{}
+	limiters := gcache.New(5).LRU().Build()
 
 	var log Log
 	for s.Scan() {
@@ -84,15 +85,11 @@ func main() {
 
 		// filter duplicated error logs
 		if log.Error != "" {
-			limiter, ok := limiters[log.Error]
-			if !ok {
-				limiter = rate.NewLimiter(rate.Every(time.Minute), 2)
-				limiters[log.Error] = limiter
-			}
-
-			if !limiter.Allow() {
+			if _, err := limiters.Get(log.Error); err != gcache.KeyNotFoundError {
 				continue
 			}
+
+			_ = limiters.SetWithExpire(log.Error, struct{}{}, time.Minute)
 		}
 
 		renderLog(&log, b)
