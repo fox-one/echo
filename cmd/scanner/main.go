@@ -72,7 +72,7 @@ func main() {
 	b := &bytes.Buffer{}
 	limiters := gcache.New(5).LRU().Build()
 
-	var log Log
+	var log Entry
 	for s.Scan() {
 		// reset log
 		log.reset()

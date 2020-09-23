@@ -16,28 +16,28 @@ const (
 	fieldNameMsg   = "msg"
 )
 
-// Entry represents Log Entry from logrus
-type Entry struct {
+// Field represents Entry Field from logrus
+type Field struct {
 	Key   string
 	Value string
 }
 
-// Log represents log message
-type Log struct {
-	Level   string
-	Error   string
-	Msg     string
-	Entries []Entry
+// Entry represents log message
+type Entry struct {
+	Level  string
+	Error  string
+	Msg    string
+	Fields []Field
 }
 
-func (log *Log) reset() {
+func (log *Entry) reset() {
 	log.Level = ""
 	log.Error = ""
 	log.Msg = ""
-	log.Entries = log.Entries[0:0]
+	log.Fields = log.Fields[0:0]
 }
 
-func renderLog(log *Log, b *bytes.Buffer) {
+func renderLog(log *Entry, b *bytes.Buffer) {
 	b.WriteString("### [")
 	b.WriteString(log.Level)
 	b.WriteString("] ")
@@ -46,17 +46,17 @@ func renderLog(log *Log, b *bytes.Buffer) {
 	b.WriteByte('\n')
 	b.WriteByte('\n')
 	b.WriteString("```yaml")
-	for _, entry := range log.Entries {
+	for _, field := range log.Fields {
 		b.WriteByte('\n')
-		b.WriteString(entry.Key)
+		b.WriteString(field.Key)
 		b.WriteString(": ")
-		b.WriteString(entry.Value)
+		b.WriteString(field.Value)
 	}
 	b.WriteByte('\n')
 	b.WriteString("```")
 }
 
-func parseLog(token []byte, log *Log) {
+func parseLog(token []byte, log *Entry) {
 	values := make(map[string]interface{})
 
 	// parse json
@@ -84,7 +84,7 @@ func parseLog(token []byte, log *Log) {
 			log.Msg = value
 		}
 
-		log.Entries = append(log.Entries, Entry{
+		log.Fields = append(log.Fields, Field{
 			Key:   k,
 			Value: value,
 		})
