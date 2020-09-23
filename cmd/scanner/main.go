@@ -45,10 +45,14 @@ func main() {
 
 	var args []string
 	if _ = json.Unmarshal([]byte(*cmd), &args); len(args) > 0 {
-		pr, pw := io.Pipe()
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			logrus.Panicln("os.Pipe", err)
+		}
 
 		go func() {
 			defer pr.Close()
+			defer pw.Close()
 
 			if err := runCmd(pw, args[0], args[1:]...); err != nil {
 				logrus.WithError(err).Errorln("cmd exist")
