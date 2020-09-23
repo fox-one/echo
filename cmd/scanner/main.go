@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"flag"
 	"io"
 	"os"
@@ -43,8 +42,9 @@ func main() {
 
 	var input io.Reader = os.Stdin
 
-	var args []string
-	if _ = json.Unmarshal([]byte(*cmd), &args); len(args) > 0 {
+	if args, ok := parseCmd(*cmd); ok {
+		logrus.Infoln("scan:", args)
+
 		pr, pw, err := os.Pipe()
 		if err != nil {
 			logrus.Panicln("os.Pipe", err)

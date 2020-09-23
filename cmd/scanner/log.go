@@ -73,7 +73,6 @@ func parseLog(token []byte, log *Entry) {
 
 	for k, v := range values {
 		value := cast.ToString(v)
-		// value = removeSurroundingQuotes(value)
 
 		switch k {
 		case fieldNameLevel:
