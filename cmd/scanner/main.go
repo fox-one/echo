@@ -78,10 +78,7 @@ func main() {
 		log.reset()
 		b.Reset()
 
-		if err := json.Unmarshal(s.Bytes(), &log); err != nil {
-			continue
-		}
-
+		parseLog(s.Bytes(), &log)
 		token, ok := tokens[log.Level]
 		if !ok {
 			continue

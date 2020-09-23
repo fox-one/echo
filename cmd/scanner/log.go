@@ -41,7 +41,7 @@ func renderLog(log *Log, b *bytes.Buffer) {
 	b.WriteString("### [")
 	b.WriteString(log.Level)
 	b.WriteString("] ")
-	b.WriteString(log.Msg)
+	b.WriteString(removeSurroundingQuotes(log.Msg))
 	b.WriteString(" ###")
 	b.WriteByte('\n')
 	b.WriteByte('\n')
@@ -52,6 +52,7 @@ func renderLog(log *Log, b *bytes.Buffer) {
 		b.WriteString(": ")
 		b.WriteString(entry.Value)
 	}
+	b.WriteByte('\n')
 	b.WriteString("```")
 }
 
@@ -72,7 +73,7 @@ func parseLog(token []byte, log *Log) {
 
 	for k, v := range values {
 		value := cast.ToString(v)
-		value = removeSurroundingQuotes(value)
+		// value = removeSurroundingQuotes(value)
 
 		switch k {
 		case fieldNameLevel:
