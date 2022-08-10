@@ -18,17 +18,22 @@ import (
 )
 
 var (
-	stdout = flag.Bool("stdout", false, "output to stdout")
-	stderr = flag.Bool("stderr", false, "output to stderr")
-	cmd    = flag.String("cmd", "", "execute shell command as input")
+	stdout bool
+	stderr bool
+	cmd    string
+
 	// deprecated
 	_ = flag.String("format", "text", "deprecated")
-
-	ctx = context.Background()
 )
 
 func main() {
+	flag.BoolVar(&stdout, "stdout", false, "output to stdout")
+	flag.BoolVar(&stderr, "stderr", false, "output to stderr")
+	flag.StringVar(&cmd, "cmd", "", "execute shell command as input")
+	flag.StringVar(&echo.Endpoint, "endpoint", echo.Endpoint, "custom endpoint for echo")
 	flag.Parse()
+
+	ctx := context.Background()
 
 	tokens := make(map[string]string)
 	for _, level := range logrus.AllLevels {
@@ -42,7 +47,7 @@ func main() {
 
 	var input io.Reader = os.Stdin
 
-	if args, ok := parseCmd(*cmd); ok {
+	if args, ok := parseCmd(cmd); ok {
 		logrus.Infoln("scan:", args)
 
 		pr, pw, err := os.Pipe()
@@ -62,9 +67,9 @@ func main() {
 		input = pr
 	}
 
-	if *stdout {
+	if stdout {
 		input = io.TeeReader(input, os.Stdout)
-	} else if *stderr {
+	} else if stderr {
 		input = io.TeeReader(input, os.Stderr)
 	}
 

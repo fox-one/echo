@@ -9,10 +9,10 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-const hostURL = "https://echo.yiplee.com"
+var Endpoint = "https://echo.fox.one"
 
 var client = resty.New().
-	SetBaseURL(hostURL).
+	SetBaseURL(Endpoint).
 	SetHeader("Content-Type", "application/json")
 
 // Payload represent message content
