@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/fox-one/echo"
-	"github.com/fox-one/mixin-sdk"
+	"github.com/fox-one/mixin-sdk-go"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 	"github.com/gofrs/uuid"
@@ -47,7 +47,11 @@ func main() {
 		privateKey = viper.GetString("private_key")
 	)
 
-	user, err := mixin.NewUser(clientID, sessionID, privateKey)
+	client, err := mixin.NewFromKeystore(&mixin.Keystore{
+		ClientID:   clientID,
+		SessionID:  sessionID,
+		PrivateKey: privateKey,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -62,7 +66,10 @@ func main() {
 				req.Body = ioutil.NopCloser(bytes.NewReader(body))
 			}
 
-			token, _ := user.SignToken(req.Method, req.URL.String(), body, time.Minute)
+			sig := mixin.SignRaw(req.Method, req.URL.String(), body)
+			requestID := extractRequestID(req)
+			token := client.SignToken(sig, requestID, time.Minute)
+			req.Header.Set("X-Request-ID", requestID)
 			req.Header.Set("Authorization", "Bearer "+token)
 			// mixin api server 屏蔽来自 proxy 的请求
 			// https://github.com/golang/go/issues/38079
@@ -82,7 +89,7 @@ func main() {
 			middleware.Recoverer,
 			middleware.Logger,
 			middleware.NewCompressor(5).Handler,
-			wrapMessage(user),
+			wrapMessage(sessionID),
 		),
 	}
 
@@ -91,23 +98,31 @@ func main() {
 	}
 }
 
-func extractConversationID(r *http.Request, user *mixin.User) (string, error) {
+func extractConversationID(r *http.Request, sessionID string) (string, error) {
 	token := r.Header.Get("Authorization")
 	token = strings.TrimPrefix(token, "Bearer ")
-	if id, err := echo.ParseToken(token, user.SessionID); err == nil {
+	if id, err := echo.ParseToken(token, sessionID); err == nil {
 		return id, nil
 	}
 
 	return "", errors.New("invalid authorization token")
 }
 
-func wrapMessage(user *mixin.User) func(handler http.Handler) http.Handler {
+func extractRequestID(r *http.Request) string {
+	if id := r.Header.Get("X-Request-ID"); id != "" {
+		return id
+	}
+
+	return mixin.RandomTraceID()
+}
+
+func wrapMessage(sessionID string) func(handler http.Handler) http.Handler {
 	pool := bpool.NewBufferPool(64)
 
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost && r.URL.Path == "/message" {
-				conversationID, err := extractConversationID(r, user)
+				conversationID, err := extractConversationID(r, sessionID)
 				if err != nil {
 					// token invalid
 					render.Status(r, http.StatusOK)

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/fox-one/echo"
-	"github.com/fox-one/mixin-sdk"
+	"github.com/fox-one/mixin-sdk-go"
 	"github.com/fox-one/pkg/uuid"
 	"github.com/spf13/viper"
 )
@@ -33,18 +33,23 @@ func main() {
 		privateKey = viper.GetString("private_key")
 	)
 
-	user, err := mixin.NewUser(clientID, sessionID, privateKey)
+	client, err := mixin.NewFromKeystore(&mixin.Keystore{
+		ClientID:   clientID,
+		SessionID:  sessionID,
+		PrivateKey: privateKey,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	ctx := context.Background()
-	blaze := mixin.NewBlazeClient(user)
-	handler := &handler{user: user}
 
 	for {
-		if err := blaze.Loop(ctx, handler); err != nil {
-			log.Println("Loop", err)
+		if err := client.LoopBlaze(ctx, handler{
+			client:    client,
+			sessionID: sessionID,
+		}); err != nil {
+			log.Println("LoopBlaze", err)
 		}
 
 		time.Sleep(time.Second)
@@ -52,10 +57,11 @@ func main() {
 }
 
 type handler struct {
-	user *mixin.User
+	client    *mixin.Client
+	sessionID string
 }
 
-func (h handler) OnAckReceipt(ctx context.Context, msg *mixin.MessageView, userID string) error {
+func (h handler) OnAckReceipt(_ context.Context, _ *mixin.MessageView, _ string) error {
 	return nil
 }
 
@@ -75,7 +81,7 @@ func (h handler) OnMessage(ctx context.Context, msg *mixin.MessageView, userID s
 			data, _ = json.MarshalIndent(raw, "", "    ")
 		}
 
-		return h.user.SendMessage(ctx, &mixin.MessageRequest{
+		return h.client.SendMessage(ctx, &mixin.MessageRequest{
 			ConversationID: msg.ConversationID,
 			MessageID:      uuid.Modify(msg.MessageID, "reply"),
 			Category:       mixin.MessageCategoryPlainText,
@@ -94,13 +100,13 @@ func (h handler) OnMessage(ctx context.Context, msg *mixin.MessageView, userID s
 		return nil
 	}
 
-	token, err := echo.SignToken(payload.UserID, h.user.SessionID, msg.ConversationID)
+	token, err := echo.SignToken(payload.UserID, h.sessionID, msg.ConversationID)
 	if err != nil {
 		log.Println("sign token", err)
 		return nil
 	}
 
-	return h.user.SendMessage(ctx, &mixin.MessageRequest{
+	return h.client.SendMessage(ctx, &mixin.MessageRequest{
 		ConversationID: msg.ConversationID,
 		RecipientID:    payload.UserID,
 		MessageID:      uuid.Modify(msg.MessageID, "echo token"),
