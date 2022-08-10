@@ -12,7 +12,7 @@ import (
 const hostURL = "https://echo.yiplee.com"
 
 var client = resty.New().
-	SetHostURL(hostURL).
+	SetBaseURL(hostURL).
 	SetHeader("Content-Type", "application/json")
 
 // Payload represent message content

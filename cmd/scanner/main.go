@@ -22,7 +22,7 @@ var (
 	stderr = flag.Bool("stderr", false, "output to stderr")
 	cmd    = flag.String("cmd", "", "execute shell command as input")
 	// deprecated
-	format = flag.String("format", "text", "deprecated")
+	_ = flag.String("format", "text", "deprecated")
 
 	ctx = context.Background()
 )

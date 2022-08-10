@@ -6,7 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -61,9 +61,9 @@ func main() {
 		Director: func(req *http.Request) {
 			var body []byte
 			if req.Body != nil {
-				body, _ = ioutil.ReadAll(req.Body)
+				body, _ = io.ReadAll(req.Body)
 				_ = req.Body.Close()
-				req.Body = ioutil.NopCloser(bytes.NewReader(body))
+				req.Body = io.NopCloser(bytes.NewReader(body))
 			}
 
 			sig := mixin.SignRaw(req.Method, req.URL.String(), body)
@@ -149,7 +149,7 @@ func wrapMessage(sessionID string) func(handler http.Handler) http.Handler {
 				_ = json.NewEncoder(b).Encode(msg)
 				r.Header.Set("Content-Length", strconv.Itoa(b.Len()))
 				r.ContentLength = int64(b.Len())
-				r.Body = ioutil.NopCloser(b)
+				r.Body = io.NopCloser(b)
 				r.URL.Path = "/messages"
 			}
 
