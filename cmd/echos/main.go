@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	host = "mixin-api.zeromesh.net"
+	host = "api.mixin.one"
 )
 
 func main() {
@@ -86,6 +86,7 @@ func main() {
 		Addr: fmt.Sprintf(":%d", *port),
 		Handler: chain(
 			proxy,
+			middleware.Heartbeat("/"),
 			middleware.Recoverer,
 			middleware.Logger,
 			middleware.NewCompressor(5).Handler,
@@ -93,6 +94,7 @@ func main() {
 		),
 	}
 
+	log.Printf("server is running on port %d", *port)
 	if err := svr.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
